@@ -2,7 +2,7 @@ import csv
 import time
 from bs4 import BeautifulSoup as bs
 # Import your custom factory blueprint from the other file
-from browser_engine import AutomatedBrowserEngine
+from ..browser_engine import AutomatedBrowserEngine
 
 # Configuration data inputs
 PROFILE_DIR = "/home/asim/pinterest_profile"
