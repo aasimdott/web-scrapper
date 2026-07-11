@@ -31,3 +31,5 @@ if not is_logged_in:
     time.sleep(3) # Let all structural tokens write down fully
 else:
     print("\n[ALREADY] Stored session matches active database maps!")
+finally:
+    engine.shutdown()

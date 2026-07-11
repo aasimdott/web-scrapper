@@ -1,25 +1,46 @@
-import os
+import logging
 from playwright.sync_api import sync_playwright
+logging.basicConfig(level= logging.INFO,
+    format= "%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler("engine.log", encoding="utf-8"),
+        logging.StreamHandler()])
 class AutomatedBrowserEngine:
     def __init__(self, profile_path):
-        self.profile_path = profile_path  # Saves your /home/asim/profile path
-        self.playwright = None       # Placeholder for the Playwright core process
-        self.context = None    # Placeholder for the active persistent browser window
+        self.profile_path = profile_path
+        self.playwright = None
+        self.context = None
+        self.log = logging.getLogger("BrowserEngine")
+        self.log.info("init success")
     def spawn_secure_context(self):
-        self.playwright = sync_playwright().start()
-        self.context = self.playwright.chromium.launch_persistent_context(
-            user_data_dir=self.profile_path,
-            headless=False,
-            executable_path="/usr/bin/chromium",
-            proxy={"server": "socks5://127.0.0.1:9050"},
-            args=["--disable-blink-features=AutomationControlled"])
-        return self.context
+        try:
+            self.log.info("core run safely")
+            self.playwright = sync_playwright().start()
+            self.log.info("Browser launched")
+            self.context = self.playwright.chromium.launch_persistent_context(
+                headless = False, executable_path = "/usr/bin/chromium",
+                user_data_dir = self.profile_path,
+                args = ["--disable-blink-features=AutomationControlled",
+                 "--no-sandbox", "--disable-infobars"])
+            self.log.info("returning the opened browser")
+            return self.context
+        except Exception as error:
+            self.log.critical(f"Exception encountered {str(error)}")
+            self.shutdown()
+            raise error
     def shutdown(self):
+        self.log.warning("closing and terminating process")
         if self.context:
-            self.context.close()
+            try:
+                self.context.close()
+                self.log.info("context closed")
+            except Exception as e:
+                self.log.error(f"Fatal: {str(e)}")
         if self.playwright:
-            self.playwright.stop()
-
+            try: 
+                self.playwright.stop()
+                self.log.info("terminated!")
+            except Exception as e:
+                self.log.error(f"Fatal: {str(e)}")
 
 """
 # 1. THE CLASS KEYWORD (The Blueprint)
