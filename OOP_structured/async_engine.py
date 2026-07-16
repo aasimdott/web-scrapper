@@ -7,11 +7,11 @@ class Async_engine:
         self.browser = None
         self.context = None
         self.log = logging.getLogger("AsyncBrowserEngine")
-    async def async_engine_init(self, headless=True):
+    async def async_engine_init(self, headless=True, exe_path="/usr/bin/chromium"):
         self.log.info("init the engine")
         self.playw = await async_playwright().start()
         self.log.info("browser launch")
-        self.browser = await self.playw.chromium.launch(headless=headless, executable_path="/usr/bin/chromium")
+        self.browser = await self.playw.chromium.launch(headless=headless, executable_path=exe_path)
     async def spoofed_context(self):
         if not self.browser:
             self.log.info(">>context may be called before launching the browser")

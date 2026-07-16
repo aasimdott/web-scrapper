@@ -1,4 +1,4 @@
-import csv, time, asyncio, logging
+import csv, time, asyncio, logging, os
 from bs4 import BeautifulSoup as bs
 from async_engine import Async_engine
 from utils import DataCleanUtility
@@ -12,15 +12,36 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
 logger = logging.getLogger("EnterpriseQueue")
 
-# Initialize central global data arrays and thread-safe queue systems
+if os.path.exists(".env"):
+    logger.info("External configuration asset '.env' detected. Injecting memory states...")
+    with open(".env", "r") as env_file:
+        for line in env_file:
+            # Strip trailing whitespaces and ignore comments or blank spacing lines
+            cleaned_line = line.strip()
+            if cleaned_line and not cleaned_line.startswith("#"):
+                # Split only on the first equals sign to separate key and string values
+                key, val = cleaned_line.split("=", 1)
+                os.environ[key.strip()] = val.strip()
+else:
+    logger.critical("Fatal operational breakdown: Missing mandatory environment configuration asset '.env'")
+    exit(1)
+
+chromium_path = os.environ.get("SYSTEM_CHROMIUM_PATH", "/usr/bin/chromium")
+base_url = os.environ.get("TARGET_BASE_URL")
+output_file = os.environ.get("OUTPUT_FILE_NAME")
+tabs = int(os.environ.get("TABS"))
+pages = int(os.environ.get("PAGES"))
+
+if not base_url:
+    logger.critical("Fatal parameter initialization error: TARGET_BASE_URL variable is undefined.")
+    exit(1)
+
+# Initialize central global data array
 target_queue = asyncio.Queue()
 master_data_pool = []
-
-# DEFINED CONFIGURATION PARAMETERS
-NUM_CONSUMER_WORKERS = 2  # Hard limit on parallel Chromium sessions for slow internet protection
-TOTAL_TARGET_PAGES = 4   # Scales easily to thousands without altering hardware overhead
 
 # ─────────────────────────────────────────────────────────────────────
 # ARCHITECTURE ZONE A: THE PRODUCER TASK
@@ -32,8 +53,8 @@ async def URL_Discovery_Producer():
     """
     logger.info("[PRODUCER] Initializing database target discovery routine...")
     
-    for page_num in range(1, TOTAL_TARGET_PAGES + 1):
-        target_url = f"https://books.toscrape.com/catalogue/page-{page_num}.html"
+    for page_num in range(1, pages + 1):
+        target_url = f"{base_url}/catalogue/page-{page_num}.html"
         
         # Asynchronously push the target string into the memory queue box
         # .put() will safely await if the queue hits a defined upper storage limit
@@ -129,16 +150,16 @@ async def main():
     
     # 1. Initialize our standard async framework infrastructure code
     engine = Async_engine()
-    await engine.async_engine_init(headless=True)
+    await engine.async_engine_init(headless=True, exe_path=chromium_path)
     
     # 2. Fire the Producer to map all URL targets into RAM storage lines
     await URL_Discovery_Producer()
     
     # 3. Instantiate the exact number of Consumer instances allowed by our hardware constraints
-    logger.info(f"[ORCHESTRATOR] Spawning {NUM_CONSUMER_WORKERS} concurrent processing channels...")
+    logger.info(f"[ORCHESTRATOR] Spawning {tabs} concurrent processing channels...")
     consumer_pool = [
         asyncio.create_task(Automation_Data_Consumer(worker_id=i, engine_instance=engine))
-        for i in range(NUM_CONSUMER_WORKERS)
+        for i in range(tabs)
     ]
     
     # 4. SYSTEM BLOCK POINT: Force the main script to wait until the queue .join() counter hits exactly 0
@@ -155,15 +176,10 @@ async def main():
     total_elapsed_time = time.time() - execution_start_checkpoint
     logger.info(f"All processing channels synchronized and closed in exactly: {total_elapsed_time:.2f} seconds.")
     
-    # ─────────────────────────────────────────────────────────────────────
-    # DATA INTEGRITY PERSISTENCE LAYER
-    # ─────────────────────────────────────────────────────────────────────
-    output_filename = "queue_optimized_dataset.csv"
-    
     if master_data_pool:
         logger.info(f"[DISK-IO] Initiating file write sequences for {len(master_data_pool)} tracked items...")
         try:
-            with open(output_filename, mode="w", newline="", encoding="utf-8") as storage_file:
+            with open(output_file, mode="w", newline="", encoding="utf-8") as storage_file:
                 excel_writer = csv.writer(storage_file)
                 
                 # Write standard database headings
@@ -172,7 +188,7 @@ async def main():
                 for data_record in master_data_pool:
                     excel_writer.writerow([data_record["text"], data_record["price"]])
                     
-            logger.info(f"[VICTORY] Enterprise data payload compiled flawlessly inside: '{output_filename}'")
+            logger.info(f"[VICTORY] Enterprise data payload compiled flawlessly inside: '{output_file}'")
             
         except IOError as system_disk_lock_error:
             logger.critical(f"[FATAL DISK ERROR] Could not commit memory payloads to storage file: {str(system_disk_lock_error)}")
