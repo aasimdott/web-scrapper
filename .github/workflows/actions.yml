@@ -6,6 +6,7 @@ on:
   schedule:
     # This runs exactly at 00:00 (Midnight) UTC every single day
     - cron: '0 0 * * *'
+  workflow_dispatch:   
 
 # What should the runner machine actually do?
 jobs:
