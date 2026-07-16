@@ -30,10 +30,10 @@ else:
     exit(1)
 
 chromium_path = os.environ.get("SYSTEM_CHROMIUM_PATH", "/usr/bin/chromium")
-base_url = os.environ.get("TARGET_BASE_URL")
-output_file = os.environ.get("OUTPUT_FILE_NAME")
-tabs = int(os.environ.get("TABS"))
-pages = int(os.environ.get("PAGES"))
+base_url = os.environ.get("TARGET_BASE_URL", "https://books.toscrape.com")
+output_file = os.environ.get("OUTPUT_FILE_NAME", "output.csv")
+tabs = int(os.environ.get("TABS", 2))
+pages = int(os.environ.get("PAGES", 5))
 
 if not base_url:
     logger.critical("Fatal parameter initialization error: TARGET_BASE_URL variable is undefined.")
