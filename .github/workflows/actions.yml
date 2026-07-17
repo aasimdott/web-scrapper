@@ -1,0 +1,40 @@
+# The name of your automation workflow
+name: Run My Midnight Script
+
+# When should this workflow run?
+on:
+  schedule:
+    # This runs exactly at 00:00 (Midnight) UTC every single day
+    - cron: '0 0 * * *'
+  workflow_dispatch:   
+
+# What should the runner machine actually do?
+jobs:
+  run-my-code:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Execute script
+        run: python multipage-priceoye.py  # <-- Make sure this matches your script's filename
+      
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          # The '|| exit 0' makes sure the workflow doesn't error out if no new files were created
+          git commit -m "Automated data update from midnight run" || exit 0
+          git push
