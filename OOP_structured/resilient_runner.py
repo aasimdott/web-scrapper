@@ -63,9 +63,10 @@ async def Data_consumer(worker, engine_ins):
                     count = 0
                     for box in boxes:
                         title = box.h3.a['title']
-                        price = box.find("p", class_="price_color").text
+                        price = box.find("p", class_="price_color").text.strip() + "\n"
+                        instock = box.find("p", class_="instock").text.strip() + "\n"
                         if title and price:
-                            data_pool.append({"title": title, "price": price})
+                            data_pool.append({"title": title, "price": price, "stock": instock})
                             count += 1
                     if count > 0:
                         success = True
@@ -81,7 +82,7 @@ async def main():
     start = time.time()
     await url_discovery()
     engine = Async_engine()
-    await engine.async_engine_init(headless=False, exe_path=browser_path)
+    await engine.async_engine_init(headless=True, exe_path=browser_path)
     consumers = [asyncio.create_task(Data_consumer(worker=i, engine_ins=engine)) for i in range(1, tabs+1)]
     await target_queue.join()
     await asyncio.gather(*consumers)
@@ -95,9 +96,9 @@ async def main():
             log.info(f"Writing {len(data_pool)} data in {sharder_path}")
             with open(sharder_path, mode="w", newline="", encoding="utf-8") as file:
                 excel = csv.writer(file)
-                excel.writerow(["Title", "Price"])
+                excel.writerow(["Title", "Price", "Availability"])
                 for data in data_pool:
-                    excel.writerow([data["title"], data["price"]])
+                    excel.writerow([data["title"], data["price"], data["stock"]])
                 log.info("Data Successfully saved.")
         except IOError as write_error:
             log.critical(f"Disk lock : {write_error}")

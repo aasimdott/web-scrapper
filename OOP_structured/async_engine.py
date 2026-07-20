@@ -18,7 +18,7 @@ class Async_engine:
             raise RuntimeError("Browser must be launched earlier")
         self.context = await self.browser.new_context(
             user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
-            viewport= {"width": 1920, "height": 1080})
+            viewport= {"width": 1280, "height": 680})
         self.log.info("getting spoofed context")
         return self.context
     async def shutdown(self):
