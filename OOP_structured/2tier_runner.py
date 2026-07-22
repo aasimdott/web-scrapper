@@ -66,9 +66,8 @@ async def Data_consumer(worker, engine_ins):
                     for box in boxes:
                         title = box.h3.a['title']
                         price = box.find("p", class_="price_color").text.strip() + "\n"
-                        
                         card_url = box.a['href']
-                        log.info(f">>> got url {base_url}catalogue/{card_url}")
+                        log.info(f"> got url {base_url}catalogue/{card_url}")
                         await page.goto(f"{base_url}catalogue/{card_url}", timeout=30000)
                         await page.wait_for_selector("div.page_inner")
                         innerhtml = await page.content()
