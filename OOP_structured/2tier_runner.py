@@ -58,20 +58,29 @@ async def Data_consumer(worker, engine_ins):
                     await page.goto(current_url, timeout=45000)
                     await page.wait_for_selector("article.product_pod", timeout=15000)
                     html = await page.content()
+                    log.info(f"got the outer html content of worker-{worker}, page={current_url}. sending to parser")
                     soup = bs(html, "html.parser")
                     boxes = soup.find_all("article", class_="product_pod")
                     count = 0
+                    log.info("traversing cards")
                     for box in boxes:
                         title = box.h3.a['title']
                         price = box.find("p", class_="price_color").text.strip() + "\n"
-                        instock = box.find("p", class_="instock").text.strip() + "\n"
+                        card = box.find("a")
+                        card_url = card['href']
+                        log.info(f">>> got url {base_url}catalogue/{card_url}")
+                        await page.goto(f"{base_url}catalogue/{card_url}", timeout=30000)
+                        await page.wait_for_selector("div.page_inner")
+                        innerhtml = await page.content()
+                        innersoup = bs(innerhtml, "html.parser")
+                        instock = innersoup.find("p", class_="instock availability").text.strip() + "\n"
                         if title and price:
                             data_pool.append({"title": title, "price": price, "stock": instock})
                             count += 1
                     if count > 0:
                         success = True
-                except (asyncio.TimeoutError,  Exception) as network_error:
-                    log.critical(f"Fatal Network lag: {network_error}")
+                except (asyncio.TimeoutError,  Exception) as _error:
+                    log.critical(f"Fatal Err0r: {_error}")
                     attempt += 1
             target_queue.task_done()
             await asyncio.sleep(1.5)
