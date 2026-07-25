@@ -86,7 +86,7 @@ class PipelineCheckpointManager:
 # ─────────────────────────────────────────────────────────────────────
 async def URL_Discovery_Producer(current_checkpoint):
     logger.info("[PRODUCER] Assessing pipeline work balance against historical checkpoints...")
-    raw_targets = [f"{BASE_TARGET_URL}{p}.html" for p in range(1, TOTAL_PIPELINE_PAGES + 1)]
+    raw_targets = [f"{BASE_TARGET_URL}catalogue/page-{p}.html" for p in range(1, TOTAL_PIPELINE_PAGES + 1)]
     
     skipped_count = 0
     for url in raw_targets:
@@ -99,7 +99,7 @@ async def URL_Discovery_Producer(current_checkpoint):
 
 async def Automation_Data_Consumer(worker_id, engine_instance):
     logger.info(f"[CONSUMER-{worker_id}] Launching failure-resilient extraction worker channels...")
-    context = await engine_instance.create_spoofed_context()
+    context = await engine_instance.spoofed_context()
     page = await context.new_page()
     
     try:
@@ -126,7 +126,7 @@ async def Automation_Data_Consumer(worker_id, engine_instance):
                         price_text = price_node.get_text(strip=True)
                         
                         if "catalogue/" not in raw_href:
-                            absolute_detail_url = f"http://toscrape.com{raw_href.replace('../', '')}"
+                            absolute_detail_url = f"http://toscrape.com/catalogue/{raw_href.replace('../', '')}"
                         else:
                             absolute_detail_url = f"http://toscrape.com{raw_href}"
                             
@@ -140,7 +140,7 @@ async def Automation_Data_Consumer(worker_id, engine_instance):
                 for book in target_detail_links:
                     try:
                         await page.goto(book["url"], timeout=30000)
-                        await page.wait_for_selector("div#product_description", timeout=10000)
+                        await page.wait_for_selector("div.product_description", timeout=10000)
                         
                         detail_soup = bs(await page.content(), "html.parser")
                         desc_header = detail_soup.find("div", id="product_description")
@@ -179,11 +179,11 @@ async def main():
     # Read state database from disc before running engine loops
     active_checkpoint = PipelineCheckpointManager.load_checkpoint()
     
-    engine = AsyncBrowserEngine()
+    engine = Async_engine()
     try:
-        await engine.initialize_engine(headless=True, executable_path=CHROMIUM_EXEC_PATH)
+        await engine.async_engine_init(headless=True, executable_path=CHROMIUM_EXEC_PATH)
     except TypeError:
-        await engine.initialize_engine(headless=True)
+        await engine.async_engine_init(headless=True)
         
     await URL_Discovery_Producer(active_checkpoint)
     
