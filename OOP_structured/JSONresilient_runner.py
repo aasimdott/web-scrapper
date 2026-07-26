@@ -6,13 +6,14 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from bs4 import BeautifulSoup as bs
-from async_engine import AsyncBrowserEngine, AutomatedStorageSharder
+from async_engine import Async_engine
+from utils import StorageSharder
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("day20_stateful_system.log", encoding="utf-8"),
+        logging.FileHandler("stateful_system.log", encoding="utf-8"),
         logging.StreamHandler()
     ]
 )
@@ -33,7 +34,7 @@ else:
     exit(1)
 
 CHROMIUM_EXEC_PATH = os.environ.get("SYSTEM_CHROMIUM_PATH", "/usr/bin/chromium")
-BASE_TARGET_URL = os.environ.get("TARGET_BASE_URL", "http://toscrape.com")
+BASE_TARGET_URL = os.environ.get("TARGET_BASE_URL", "http://books.toscrape.com")
 DATA_LAKE_ROOT = os.environ.get("DATA_LAKE_ROOT_DIR", "stateful_json_lake")
 NUM_CONSUMER_WORKERS = int(os.environ.get("MAX_CONCURRENT_WORKERS", 2))
 TOTAL_PIPELINE_PAGES = int(os.environ.get("TOTAL_PIPELINE_PAGES", 5)) # Scaled to test multi-page tracking
@@ -126,21 +127,22 @@ async def Automation_Data_Consumer(worker_id, engine_instance):
                         price_text = price_node.get_text(strip=True)
                         
                         if "catalogue/" not in raw_href:
-                            absolute_detail_url = f"http://toscrape.com/catalogue/{raw_href.replace('../', '')}"
+                            absolute_detail_url = f"http://books.toscrape.com/catalogue/{raw_href.replace('../', '')}"
                         else:
-                            absolute_detail_url = f"http://toscrape.com{raw_href}"
+                            absolute_detail_url = f"http://books.toscrape.com{raw_href}"
                             
                         target_detail_links.append({
                             "title": title_text,
                             "price": price_text,
                             "url": absolute_detail_url
                         })
+                        logger.info(f">>> {absolute_detail_url}")
 
                 # Tier 2 Extraction Sequence
                 for book in target_detail_links:
                     try:
                         await page.goto(book["url"], timeout=30000)
-                        await page.wait_for_selector("div.product_description", timeout=10000)
+                        await page.wait_for_selector("div.page_inner", timeout=10000)
                         
                         detail_soup = bs(await page.content(), "html.parser")
                         desc_header = detail_soup.find("div", id="product_description")
@@ -205,7 +207,7 @@ async def main():
     
     if master_data_pool:
         # Dynamic pathing targeting structural JSON storage parameters
-        output_json_path = AutomatedStorageSharder.resolve_production_path(DATA_LAKE_ROOT, "stateful_records")
+        output_json_path = StorageSharder.resolve_production_path(DATA_LAKE_ROOT, "stateful_records")
         output_json_path = Path(output_json_path).with_suffix('.json')
         output_json_path.parent.mkdir(parents=True, exist_ok=True)
         
