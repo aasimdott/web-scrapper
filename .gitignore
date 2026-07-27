@@ -1,3 +1,4 @@
+*.db
 .env
 .git
 __pycache__
