@@ -3,15 +3,15 @@ import requests
 from bs4 import BeautifulSoup
 
 fake_browser_id = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"}
-
-with open("dynamic_books.csv", mode="w", newline="", encoding="utf-8") as target_file:
+file = "Books.csv"
+with open(file , mode="w", newline="", encoding="utf-8") as target_file:
     excel_writer = csv.writer(target_file)
     excel_writer.writerow(["Book Title", "Price"])
 
     page_number = 1  # Start at page 1
 
     while True:  # Keep looping indefinitely
-        url = f"http://toscrape.com{page_number}.html"
+        url = f"http://books.toscrape.com/catalogue/page-{page_number}.html"
         webpage_data = requests.get(url, headers=fake_browser_id)
 
         # BRAKE SYSTEM: If the website says the page doesn't exist (404), STOP!
@@ -26,6 +26,7 @@ with open("dynamic_books.csv", mode="w", newline="", encoding="utf-8") as target
         for container in all_book_containers:
             book_title = container.h3.a["title"]
             book_price = container.find("p", class_="price_color").text
+            print(f"Adding a new book into {file}")
             excel_writer.writerow([book_title, book_price])
 
         page_number += 1  # Increment to move to the next page layout

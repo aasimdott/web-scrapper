@@ -35,7 +35,7 @@ file_name = f"{search.replace(" ", "_")}_.csv"
 data_rows = []
 url = f"https://priceoye.pk/search?q={encoded}"
 engine = AutomatedBrowserEngine()
-context = engine.spawn_clean_context()
+context = engine.spawn_clean_context(headless=False)
 page = context.new_page()
 page.goto(url)
 while i <= number:
