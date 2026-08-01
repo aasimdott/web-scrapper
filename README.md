@@ -3,7 +3,7 @@
 
 ## 📋 Prerequisites
 
-Before running the script, ensure you have the following system dependencies installed:
+Before running these scripts, ensure you have the following system dependencies installed:
 
 1. **playwright**
 2. **bs4>=4.12.0**
