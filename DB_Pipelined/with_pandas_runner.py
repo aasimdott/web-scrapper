@@ -38,6 +38,18 @@ class PipelineContext:
     def get_export_path(self, extension: str) -> str:
         return os.path.join(self.output_dir, f"products_{self.timestamp}.{extension}")
 
+class DataQualityGuard:
+    """Day 23: Screens attributes directly to catch code breakage or broken fields."""
+    @staticmethod
+    def verify_product(data: dict) -> tuple[bool, str]:
+        if not data.get("title") or data["title"].strip() in ["Unknown Title", ""]:
+            return False, "Data Extraction Fault: Title field is blank."
+        if not data.get("url") or not data["url"].startswith("http"):
+            return False, "Data Extraction Fault: Resource URL target format is invalid."
+        if not any(char.isdigit() for char in data.get("price", "")):
+            return False, f"Data Extraction Fault: Price string '{data.get('price')}' contains no numeric elements."
+        return True, ""
+
 class MultiFormatExporting:
     def __init__(self, context: PipelineContext):
         self.context = context
@@ -86,32 +98,43 @@ class MultiFormatExporting:
 
 class AsyncDatabaseManager:
     @staticmethod
-    async def initialize_db():
+            # Replace the base initialize_db string inside AsyncDatabaseManager with this logic:
         async with aiosqlite.connect(DATABASE_FILE) as db:
             await db.execute("PRAGMA journal_mode=WAL;")
             await db.execute("""
-                CREATE TABLE IF NOT EXISTS product_records(
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    title TEXT NOT NULL,
-                    price TEXT,
-                    description TEXT,
-                    source_page TEXT,
-                    url TEXT UNIQUE,
-                    scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
+                CREATE TABLE IF NOT EXISTS product_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, price TEXT,
+                    description TEXT, source_page TEXT, url TEXT UNIQUE, scraped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
             """)
             await db.execute("""
-                CREATE TABLE IF NOT EXISTS execution_logs(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                worker_id TEXT,
-                event_type TEXT,
-                message TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                CREATE TABLE IF NOT EXISTS execution_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, worker_id TEXT, event_type TEXT, message TEXT, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             await db.execute("CREATE INDEX IF NOT EXISTS idx_product_url ON product_records(url);")
+            
+            # --- DAY 23 UPDATED PRAGMA METADATA PATTERNS ---
+            db.row_factory = aiosqlite.Row
+            async with db.execute("PRAGMA table_info(product_records);") as cursor:
+                existing_columns = {col["name"] for col in await cursor.fetchall()}
+            
+            if "star_rating" not in existing_columns:
+                await db.execute("ALTER TABLE product_records ADD COLUMN star_rating TEXT DEFAULT 'Three';")
+            if "stock_status" not in existing_columns:
+                await db.execute("ALTER TABLE product_records ADD COLUMN stock_status TEXT DEFAULT 'In stock';")
             await db.commit()
-            logger.info(F"DataBase Initialized '{DATABASE_FILE}'")
+
+    # Expand the static signature arguments and execution maps inside write_product:
+    @staticmethod
+    async def write_product(worker_id, title, price, description, source_page, url, star_rating, stock_status):
+        async with aiosqlite.connect(DATABASE_FILE) as db:
+            await db.execute("""
+                INSERT INTO product_records (title, price, description, source_page, url, star_rating, stock_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING;
+            """, (title, price, description, source_page, url, star_rating, stock_status))
+            await db.commit()
+
     @staticmethod
     async def log_event(worker_id, event_type, message):
         """Saves a pipeline engine event to the internal database ledger."""
@@ -127,21 +150,6 @@ class AsyncDatabaseManager:
             async with db.execute("SELECT DISTINCT source_page FROM product_records;") as cursor:
                 rows = await cursor.fetchall()
                 return {row[0] for row in rows if row}
-    @staticmethod
-    async def write_product(worker_id, title, price, description, source_page, url):
-        async with aiosqlite.connect(DATABASE_FILE) as db:
-            try:
-                await db.execute("""
-                    INSERT INTO product_records (title, price, description, source_page, url)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(url) DO NOTHING;
-                """, (title, price, description, source_page, url))
-                await db.commit()
-            except Exception as e:
-                await AsyncDatabaseManager.log_event(
-                    worker_id, "WRITE_ERROR", f"Failed writing product {url}: {str(e)}"
-                )
-                logger.error(f"[{worker_id}] SQL Write Error: {str(e)}")
 
 async def URL_Discovery_Producer():
     logger.info("[PRODUCER] Fetching historical progress from SQL database...")
@@ -183,10 +191,12 @@ async def Automation_Data_Consumer(worker_name, engine_instance):
                             absolute_detail_url = f"{BASE_TARGET_URL}catalogue/{raw_href.replace("../","")}"
                         else:
                             absolute_detail_url = f"{BASE_TARGET_URL}{raw_href.replace("../","")}"
-                        
-                        target_detail_links.append({"title": title_text, 
-                           "price": price_text, "url": absolute_detail_url
-                           })
+                        instock_node = pod.find("p", class_="instock")
+                        stock_text = instock_node.get_text(strip=True) if instock_node else "In stock"
+                        target_detail_links.append({
+                            "title": title_text, "price": price_text, "url": absolute_detail_url,
+                             "stock_status": stock_text
+                        })
                 items_saved = 0
                 for book in target_detail_links:
                     try:
@@ -198,14 +208,19 @@ async def Automation_Data_Consumer(worker_name, engine_instance):
                         desc_header = detail_soup.find("div", id="product_description")
                         desc_node = desc_header.find_next_sibling("p") if desc_header else None
                         description_text = desc_node.get_text(strip=True) if desc_node else "N/A"
+                        product_payload = {"title": book["title"], "price": book["price"], "url": book["url"]}
+                        is_valid, validation_error = DataQualityGuard.verify_product(product_payload)
+                        
+                        if not is_valid:
+                            logger.warning(f"[{worker_name}] [QUARANTINE ALERT] Data anomaly hit: {validation_error}")
+                            await AsyncDatabaseManager.log_event(worker_name, "SCHEMA_DRIFT", f"{validation_error} at URL: {book['url']}")
+                            continue # Bypasses bad entries without halting worker tasks
+        
+                        # Update the target call to match your versioned schema properties
                         await AsyncDatabaseManager.write_product(
-                            worker_id = worker_name,
-                            title = book["title"],
-                            price = book["price"],
-                            description = description_text,
-                            source_page = current_catalog_url,
-                            url = book["url"]
-                        )
+                            worker_id=worker_name, title=book["title"], price=book["price"], description=description_text,
+                            source_page=current_catalog_url, url=book["url"], stock_status=book["stock_status"])
+                        
                         items_saved += 1
                         await asyncio.sleep(0.2)
                     except Exception as inner_fault:
