@@ -98,7 +98,8 @@ class MultiFormatExporting:
 
 class AsyncDatabaseManager:
     @staticmethod
-            # Replace the base initialize_db string inside AsyncDatabaseManager with this logic:
+    async def initialize_db():
+        # Replace the base initialize_db string inside AsyncDatabaseManager with this logic:
         async with aiosqlite.connect(DATABASE_FILE) as db:
             await db.execute("PRAGMA journal_mode=WAL;")
             await db.execute("""
@@ -127,12 +128,12 @@ class AsyncDatabaseManager:
 
     # Expand the static signature arguments and execution maps inside write_product:
     @staticmethod
-    async def write_product(worker_id, title, price, description, source_page, url, star_rating, stock_status):
+    async def write_product(worker_id, title, price, description, source_page, url, stock_status):
         async with aiosqlite.connect(DATABASE_FILE) as db:
             await db.execute("""
-                INSERT INTO product_records (title, price, description, source_page, url, star_rating, stock_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING;
-            """, (title, price, description, source_page, url, star_rating, stock_status))
+                INSERT INTO product_records (title, price, description, source_page, url, stock_status)
+                VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(url) DO NOTHING;
+            """, (title, price, description, source_page, url, stock_status))
             await db.commit()
 
     @staticmethod
@@ -204,7 +205,7 @@ async def Automation_Data_Consumer(worker_name, engine_instance):
                         logger.info(f"product >>> {absolute_detail_url}")
                         await page.wait_for_selector("div.page_inner", timeout=10000)
                         detail_soup = bs(await page.content(), "html.parser")
-                        logger.info("^^^ got detail")
+                        logger.info("^^^ got details page")
                         desc_header = detail_soup.find("div", id="product_description")
                         desc_node = desc_header.find_next_sibling("p") if desc_header else None
                         description_text = desc_node.get_text(strip=True) if desc_node else "N/A"
@@ -224,7 +225,7 @@ async def Automation_Data_Consumer(worker_name, engine_instance):
                         items_saved += 1
                         await asyncio.sleep(0.2)
                     except Exception as inner_fault:
-                        logger.error(f"[{worker_name}] Error extracting detail page of {book["url"]}")
+                        logger.error(f"[{worker_name}] Error <{inner_fault}> extracting detail page of {book["url"]}")
                         continue
                 await AsyncDatabaseManager.log_event(worker_name, "PAGE_ERROR", 
                     f"Failed page {current_catalog_url}: {str(page_fault)}")
