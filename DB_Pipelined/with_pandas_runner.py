@@ -120,8 +120,6 @@ class AsyncDatabaseManager:
             async with db.execute("PRAGMA table_info(product_records);") as cursor:
                 existing_columns = {col["name"] for col in await cursor.fetchall()}
             
-            if "star_rating" not in existing_columns:
-                await db.execute("ALTER TABLE product_records ADD COLUMN star_rating TEXT DEFAULT 'Three';")
             if "stock_status" not in existing_columns:
                 await db.execute("ALTER TABLE product_records ADD COLUMN stock_status TEXT DEFAULT 'In stock';")
             await db.commit()
