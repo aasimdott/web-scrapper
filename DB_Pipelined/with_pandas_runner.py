@@ -225,8 +225,6 @@ async def Automation_Data_Consumer(worker_name, engine_instance):
                     except Exception as inner_fault:
                         logger.error(f"[{worker_name}] Error <{inner_fault}> extracting detail page of {book["url"]}")
                         continue
-                await AsyncDatabaseManager.log_event(worker_name, "PAGE_ERROR", 
-                    f"Failed page {current_catalog_url}: {str(page_fault)}")
             except Exception as page_fault:
                 logger.error(f"[{worker_name}] Error loading catalog page {current_catalog_url}: {str(page_fault)}")
                 await AsyncDatabaseManager.log_event(worker_name, "PAGE_ERROR", 
