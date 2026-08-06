@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 from datetime import datetime
 from bs4 import BeautifulSoup as bs
-from async_engine import AsyncBrowserEngine
+from async_engine import Async_engine
 logging.basicConfig(level= logging.INFO, format= "%(asctime)s [%(levelname)s %(message)s]", 
     handlers= logging.StreamHandler())
 logger = logging.getLogger("Day24Runner")
@@ -30,7 +30,7 @@ class pipeline:
     def __init__(self, output_path):
         self.output_path = output_path
         self.timestamp = datetime.now().strftime("%Y%m%d %H%M%S")
-        os.mkdirs(self.output_path, exist_ok=True)
+        os.makedirs(self.output_path, exist_ok=True)
     def export_path(self, extension: str) -> str:
         return os.path.join(self.output_path, f"products_{self.timestamp}.{extension}")
 class multiformat_export:
@@ -38,16 +38,16 @@ class multiformat_export:
         self.context = context
     async def execute_export(self, records: dict) -> bool:
         logger.info("Data exporting Initialized")
-        df = pd.DataFrames(records)
+        df = pd.DataFrame(records)
         csv = self.context.export_path("csv")
-        df.to_csv(csv, ensure_ascii=False)
+        df.to_csv(csv, encoding='utf-8', index=False)
         jsonl = self.context.export_path("jsonl")
-        df.to_json(jsonl, orient='records', line=True)
+        df.to_json(jsonl, orient='records', lines=True, force_ascii=False)
         logger.info("Data is successfully written in csv and jsonl")
 async def url_discovery():
     logger.info("making url queue")
     for page in range(1, PAGES+1):
-        url = f"{BASE_TARGET}/catalogue/page-{page}"
+        url = f"{BASE_TARGET}/catalogue/page-{page}.html"
         await target_queue.put(url)
     logger.info("URLs Created")
 async def automated_data_scraper(worker, engine_instance):
@@ -57,7 +57,7 @@ async def automated_data_scraper(worker, engine_instance):
         while not target_queue.empty():
             current_url = await target_queue.get()
             try:
-                await page.goto(current_url, timeout=30000)
+                await page.goto(current_url, timeout=45000)
                 await page.wait_for_selector("article.product_pod", timeout=10000)
                 soup = bs(await page.content(), "html.parser")
                 boxes = soup.find_all("article", class_="product_pod")
@@ -70,17 +70,17 @@ async def automated_data_scraper(worker, engine_instance):
                         details = f"{BASE_TARGET}/catalogue/{href}"
                         detail_links.append({"title": title, "price": price, "url": details})
                 for book in detail_links:
-                    await page.goto(book[url])
+                    await page.goto(book["url"])
                     await page.wait_for_selector("div.page_inner", timeout=30000)
                     detail_soup = bs(await page.content(), "html.parser")
                     desc = detail_soup.find("div", id="product_description")
                     descript = desc.find_next_sibling("p")
                     desc_text = descript.get_text(strip=True)
                     instock = detail_soup.find("p", class_="instock").text
-                    records.append({"title": book[title], "price": book[price], "description": desc_text,
-                       "instock": instock, "url": book[url]})
+                    records.append({"title": book["title"], "price": book["price"], "description": desc_text,
+                       "instock": instock, "url": book["url"]})
             except Exception as page_fault:
-                logger.error(f"[{worker}] Error loading catalog page {current_url}: {str(page_fault)}")
+                logger.error(f"[{worker}] Error: {str(page_fault)}")
             finally:
                 target_queue.task_done()
         await asyncio.sleep(0.2)
@@ -92,8 +92,17 @@ async def main():
     pipelinecontext = pipeline(output_path="exported_data")
     export_engine = multiformat_export(context = pipelinecontext)
     engine = Async_engine()
-    await engine.async_engine_init(headless=True, exe_path="BROWSER_PATH")    
-    await url_dicovery()
-    if targe_queue.qsize() == 0:
+    await engine.async_engine_init(headless=False, exe_path=BROWSER_PATH)    
+    await url_discovery()
+    if target_queue.qsize() == 0:
         await engine.shutdown()
-    
+    consumers = [asyncio.create_task(automated_data_scraper(worker=i, engine_instance=engine)) for i in range(1,TABS+1)]
+    await target_queue.join()
+    await asyncio.gather(*consumers)
+    await engine.shutdown()
+    if records:
+        await export_engine.execute_export(records)
+    duration = (datetime.now() - start).total_seconds()
+
+if __name__ == "__main__":
+    asyncio.run(main())
