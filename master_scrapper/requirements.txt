@@ -1,0 +1,5 @@
+celery==5.4.0
+redis==5.0.1
+requests==2.31.0
+beautifulsoup4==4.12.3
+pydantic==2.7.1
